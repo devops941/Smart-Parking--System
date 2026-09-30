@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum SlotStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  MAINTENANCE
+  OFFLINE
+}
+
+enum SlotType {
+  STANDARD
+  VIP
+  EV_CHARGING
+  HANDICAPPED
+  TWO_WHEELER
+}
+
+enum SensorType {
+  ULTRASONIC
+  INFRARED
+  MAGNETIC
+  CAMERA_AI
+}
+
+enum SensorStatus {
+  ONLINE
+  OFFLINE
+  WARNING
+  ERROR
+}
+
+enum ConnectionType {
+  WIFI
+  MQTT
+  HTTP_REST
+  LORA
+  BLUETOOTH
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(ADMIN)
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ParkingArea {
+  id          String        @id @default(uuid())
+  name        String        @unique // e.g. "Area A - Ground Floor"
+  code        String        @unique // e.g. "AREA-A"
+  description String?
+  floorLevel  Int           @default(0)
+  totalSlots  Int           @default(0)
+  hourlyRate  Float         @default(20.0)
+  slots       ParkingSlot[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ParkingSlot {
+  id             String           @id @default(uuid())
+  slotNumber     String           @unique // e.g. "SLOT-01", "A-101"
+  areaId         String
+  area           ParkingArea      @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  slotType       SlotType         @default(STANDARD)
+  status         SlotStatus       @default(AVAILABLE)
+  isActive       Boolean          @default(true)
+  sensorId       String?          @unique
+  sensor         Sensor?          @relation(fields: [sensorId], references: [id])
+  currentVehicle String?          // Vehicle plate number if occupied
+  lastStatusChange DateTime       @default(now())
+  sessions       ParkingSession[]
+  reservations   Reservation[]
+  readings       SensorReading[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([areaId])
+  @@index([status])
+}
+
+model Sensor {
+  id             String          @id @default(uuid())
+  sensorCode     String          @unique // e.g. "SENSOR-001"
+  sensorType     SensorType      @default(ULTRASONIC)
+  connectionType ConnectionType  @default(WIFI)
+  status         SensorStatus    @default(ONLINE)
+  ipAddress      String?
+  macAddress     String?
+  firmwareVer    String?         @default("v1.2.0-esp32")
+  batteryLevel   Int?            @default(100) // Percentage or voltage
+  lastReading    Float?          // e.g. distance in cm (12.4 cm)
+  thresholdCm    Float           @default(50.0) // Distance threshold to determine vehicle presence (< 50cm = occupied)
+  lastSeen       DateTime        @default(now())
+  slot           ParkingSlot?
+  readings       SensorReading[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model Vehicle {
+  id            String           @id @default(uuid())
+  plateNumber   String           @unique // e.g. "TN-58-AB-1234"
+  vehicleType   String           @default("Car") // Sedan, SUV, Bike, EV
+  ownerName     String?
+  ownerPhone    String?
+  color         String?
+  model         String?
+  sessions      ParkingSession[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model ParkingSession {
+  id            String        @id @default(uuid())
+  sessionId     String        @unique // e.g. "SES-20260929-001"
+  slotId        String
+  slot          ParkingSlot   @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  vehicleId     String?
+  vehicle       Vehicle?      @relation(fields: [vehicleId], references: [id])
+  vehiclePlate  String        // Cached plate number
+  entryTime     DateTime      @default(now())
+  exitTime      DateTime?
+  durationMin   Int?          // Calculated duration in minutes
+  feeAmount     Float?        @default(0.0)
+  status        SessionStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([slotId])
+  @@index([vehiclePlate])
+  @@index([status])
+}
+
+model SensorReading {
+  id          String       @id @default(uuid())
+  sensorId    String
+  sensor      Sensor       @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  slotId      String?
+  slot        ParkingSlot? @relation(fields: [slotId], references: [id])
+  distanceCm  Float        // Distance reading in cm
+  rawPayload  String?      // JSON string of ESP32 payload
+  isOccupied  Boolean      // Interpreted result based on threshold
+  rssi        Int?         // WiFi signal strength in dBm (e.g. -65)
+  timestamp   DateTime     @default(now())
+
+  @@index([sensorId])
+  @@index([timestamp])
+}
+
+enum ReservationStatus {
+  RESERVED
+  OCCUPIED
+  COMPLETED
+  CANCELLED
+}
+
+model Reservation {
+  id              String            @id @default(uuid())
+  reservationCode String            @unique // e.g. "RES-20260930-101"
+  slotId          String
+  slot            ParkingSlot       @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotNumber      String
+  vehiclePlate    String
+  vehicleType     String            @default("Car")
+  driverName      String
+  driverPhone     String
+  startTime       String            // e.g. "11:00"
+  endTime         String            // e.g. "12:00"
+  durationMinutes Int               @default(60)
+  estimatedFee    Float             @default(20.0)
+  bookingDate     String            // e.g. "2026-09-30"
+  status          ReservationStatus @default(RESERVED)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([slotId])
+  @@index([vehiclePlate])
+  @@index([status])
+  @@index([bookingDate])
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  title     String
+  message   String
+  severity  NotificationSeverity @default(INFO)
+  category  String               @default("PARKING") // SENSOR, PARKING, SYSTEM, SECURITY
+  isRead    Boolean              @default(false)
+  metadata  String?              // JSON data for target slot or sensor
+  createdAt DateTime             @default(now())
+
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  category    String   @default("GENERAL") // GENERAL, PARKING, SENSOR, NOTIFICATION, SYSTEM
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
