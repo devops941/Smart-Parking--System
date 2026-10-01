@@ -382,8 +382,10 @@ export class IoTIngestService {
             broadcastSlotUpdate(updatedSlot);
           }
         }
-      } catch {}
-    }, 3000);
+      } catch (err: any) {
+        // Safe catch for serverless or initial DB connect period
+      }
+    }, 5000);
   }
 }
 
