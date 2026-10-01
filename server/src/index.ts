@@ -104,11 +104,37 @@ try {
   console.warn(`⚠️ [MQTT Notice] Could not initialize MQTT client: ${err.message}`);
 }
 
-// Health Check
-app.get('/api/health', (req: Request, res: Response) => {
-  res.json({
+// Root Route & Health Checks
+app.get('/', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'online',
+    message: '🚀 Smart Parking Management System IoT Backend is running successfully!',
+    system: 'Smart Parking Management IoT Backend',
+    uptime: `${Math.floor(process.uptime())}s`,
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      dashboard: '/api/dashboard',
+      parking: '/api/parking',
+      sensors: '/api/sensors',
+      vehicles: '/api/vehicles',
+      sessions: '/api/parking-sessions',
+      analytics: '/api/analytics',
+      reports: '/api/reports',
+      notifications: '/api/notifications',
+      settings: '/api/settings',
+      simulator: '/api/simulator/status',
+    },
+    simulationActive: isSimulationActive(),
+  });
+});
+
+app.get(['/health', '/api/health'], (req: Request, res: Response) => {
+  res.status(200).json({
     status: 'online',
     system: 'Smart Parking Management IoT Backend',
+    uptime: `${Math.floor(process.uptime())}s`,
     timestamp: new Date().toISOString(),
     simulationActive: isSimulationActive(),
   });
