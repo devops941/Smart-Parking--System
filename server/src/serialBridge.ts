@@ -1,9 +1,16 @@
+import 'dotenv/config';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 import { io, Socket } from 'socket.io-client';
 
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:5000/api/sensors/data';
-const WS_URL = process.env.WS_URL || 'http://localhost:5000';
+const SERVER_URL = process.env.SERVER_URL || 'https://smart-parking-system-xyde.vercel.app/api/sensors/data';
+const WS_URL = process.env.WS_URL || 'https://smart-parking-system-xyde.vercel.app';
+
+// const SERVER_URL = process.env.SERVER_URL || 'http://localhost:5000/api/sensors/data';
+// const WS_URL = process.env.WS_URL || 'http://localhost:5000';
+
+
+
 const BAUD_RATE = 9600;
 const RECONNECT_INTERVAL_MS = 2000;
 
@@ -97,7 +104,8 @@ function initWebSocket(getPort: () => SerialPort | null) {
 async function syncInitialState(port: SerialPort | null) {
   if (!port || !port.isOpen) return;
   try {
-    const res = await fetch('http://localhost:5000/api/parking/slots');
+    const slotsUrl = SERVER_URL.replace('/sensors/data', '/parking/slots');
+    const res = await fetch(slotsUrl);
     const data = (await res.json()) as any;
     if (data && data.success && Array.isArray(data.data)) {
       const slotA1 = data.data.find((s: any) => s.slotNumber === 'A-01');
